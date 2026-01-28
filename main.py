@@ -18,6 +18,32 @@ from typing import Dict, List, Tuple, Optional
 from PIL import Image
 from io import BytesIO
 
+
+def get_base_dir() -> str:
+    """
+    获取程序运行的基础目录，兼容开发环境与 PyInstaller 打包后的 onefile 模式。
+    
+    - 开发环境：返回当前脚本所在目录
+    - 打包后：返回可执行文件 exe 所在目录（用于查找旁边的 PaddleOCR-json_v1.4.1 文件夹）
+    """
+    # PyInstaller 冻结后的程序会设置 sys.frozen = True
+    if getattr(sys, "frozen", False):
+        # sys.executable 即打包后的 exe 路径
+        return os.path.dirname(os.path.abspath(sys.executable))
+    # 正常的 Python 运行环境
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def resource_path(relative_path: str) -> str:
+    """
+    将相对路径转换为基于程序根目录的绝对路径。
+    
+    这里统一从「脚本 / exe 所在目录」开始，并返回绝对路径，
+    方便采用「1 个 EXE + 1 个 OCR 文件夹」的半独立打包方案，
+    同时避免多线程 / 子进程切换工作目录导致的相对路径问题。
+    """
+    return os.path.abspath(os.path.join(get_base_dir(), relative_path))
+
 # PySide6 UI
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -695,11 +721,13 @@ class OCRImageMatcher(QMainWindow):
         self.init_ui()
     
     def find_paddleocr_exe(self):
-        """查找 PaddleOCR-json.exe 的位置"""
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        """查找 PaddleOCR-json.exe 的位置（兼容开发环境与打包后的 EXE）"""
+        base_dir = get_base_dir()
         possible_paths = [
-            os.path.join(base_dir, "PaddleOCR-json_v1.4.1", "PaddleOCR-json.exe"),
-            os.path.join(base_dir, "PaddleOCR-json.exe"),
+            # 推荐结构：exe / main.py 同级的 PaddleOCR-json_v1.4.1 目录
+            resource_path(os.path.join("PaddleOCR-json_v1.4.1", "PaddleOCR-json.exe")),
+            # 兜底：直接放在根目录下
+            resource_path("PaddleOCR-json.exe"),
         ]
         
         for path in possible_paths:
@@ -2788,4 +2816,8 @@ def main():
 
 
 if __name__ == "__main__":
+    # PyInstaller onefile + Windows 下，多进程 / 子进程场景的保护
+    # 避免某些情况下程序在启动时被反复拉起自身
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()

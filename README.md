@@ -21,29 +21,63 @@
 ### 主要文件与目录
 
 - **`main.py`**  
-  - 整个应用的主入口，包含：
-    - `OCRController`：负责启动、管理 `PaddleOCR-json.exe` 子进程，并对单张图片进行 OCR。
-    - `OCRWorker`（继承自 `QThread`）：在后台线程中批量执行 OCR 并通过信号实时更新界面。
-    - `ImageCard`：单张图片在界面中的卡片组件，展示缩略图、文件名、尺寸、OCR 摘要、匹配状态等。
-    - 其他 UI 相关类与逻辑：窗口布局、按钮交互、进度条、日志输出、结果预览等。
-  - 架构分层：
-    - **表现层**：PySide6 图形化界面（窗口、小部件、卡片网格等）
-    - **业务逻辑层**：图片列表管理、任务调度、重命名策略与匹配逻辑
-    - **核心服务层**：通过 `OCRController` 调用 `PaddleOCR-json.exe` 完成文字识别
+  - **应用主程序入口**：启动 PySide6 界面、初始化 OCR 引擎、管理业务逻辑。
+  - **核心类**：
+    - `OCRController`：负责启动/关闭 `PaddleOCR-json.exe` 子进程，发送图片路径、接收识别结果。
+    - `OCRWorker`（QThread）：在后台线程中批量执行 OCR，并通过 Qt 信号将进度和结果发回 UI。
+    - `ImageCard`：单张图片在 UI 中的展示组件（缩略图、文件名、尺寸、OCR 摘要、匹配状态）。
+    - `OCRImageMatcher`（QMainWindow）：主窗口类，负责整体布局、交互逻辑和重命名流程。
+  - **辅助函数**：
+    - `get_base_dir()`：统一获取“脚本/EXE 所在目录”，兼容开发环境与打包后环境。
+    - `resource_path()`：基于上面的根目录，构造资源（如 `PaddleOCR-json_v1.4.1`）的绝对路径。
+    - `find_paddleocr_exe()`：在预设位置查找 `PaddleOCR-json.exe` 并校验 `models` 目录是否存在。
+  - **程序入口**：
+    - `main()`：创建 `QApplication`，设置样式、创建并显示主窗口。
+    - `if __name__ == "__main__":` 中使用 `multiprocessing.freeze_support()` 以兼容 PyInstaller `--onefile`。
 
 - **`PaddleOCR-json_v1.4.1/`**  
-  - `PaddleOCR-json.exe`：本地 OCR 引擎（无需联网）
-  - `models/`：各语言的 OCR 模型与配置、字典文件  
+  - **`PaddleOCR-json.exe`**：本地 OCR 引擎（无需联网），由本项目的 `OCRController` 调用。
+  - **`models/`**：各语言的 OCR 模型与配置、字典文件：
     - `ch_PP-OCRv3_det_infer/`：中文文本检测模型  
     - `ch_PP-OCRv3_rec_infer/`：中文文本识别模型  
     - `ch_ppocr_mobile_v2.0_cls_infer/`：方向/分类模型  
     - 其他语言模型（英文、日文、韩文、繁体中文、俄文等）  
     - `dict_*.txt`：对应语言的字符字典  
     - `config_*.txt`：对应语言/配置的识别参数
-  - 运行依赖 DLL：如 `paddle_inference.dll`, `onnxruntime.dll`, `opencv_world4100.dll` 等。
+  - **运行依赖 DLL**：如 `paddle_inference.dll`, `onnxruntime.dll`, `opencv_world4100.dll` 等，供引擎调用。
+
+- **`README.md`**  
+  - 当前文档，详细说明：项目背景、功能、使用方法、打包/发布流程、内部原理与常见问题。
+
+- **`.gitignore`**  
+  - Git 忽略配置，排除：
+    - Python 缓存目录：`__pycache__/`, `*.pyc` 等  
+    - 虚拟环境目录：`venv/`, `.venv/`, `env/` 等  
+    - 打包产物：`build/`, `dist/`, `*.spec`  
+    - IDE 配置与临时文件：`.vscode/`, `.idea/`, `*.log`, `*.tmp`, `*.bak` 等
+
+- **`UmiOCR-Rename.spec`（可选存在）**  
+  - PyInstaller 自动生成的打包配置文件：
+    - 记录入口脚本、打包模式（onefile/onedir）、附加数据、图标等设置。
+    - 可以用 `pyinstaller UmiOCR-Rename.spec` 按相同配置重新打包。
+  - 本仓库默认通过 `.gitignore` 忽略该文件，如需固定打包配置，可手动将其纳入版本控制。
+
+- **`build/`（打包时自动生成）**  
+  - PyInstaller 的中间构建目录，保存临时文件和分析结果，对最终运行不必要。
+  - 可以随时删除或忽略，不建议提交到 Git。
+
+- **`dist/`（打包输出目录）**  
+  - 存放最终生成的可执行文件：
+    - `UmiOCR-Rename.exe`：打包后的独立 EXE。
+    - `PaddleOCR-json_v1.4.1/`：发布时需要手动复制到此目录，与 EXE 同级。
+  - 可以整体压缩并分发给用户使用。
+
+- **`venv/`（推荐）**  
+  - 本项目建议的 Python 虚拟环境目录（通过 `python -m venv venv` 创建）。
+  - 用于隔离依赖版本，确保打包环境干净、可复现。
 
 - **`__pycache__/`**  
-  - Python 运行时自动生成的缓存目录，可忽略。
+  - Python 运行时自动生成的字节码缓存目录，可忽略，不纳入版本控制。
 
 ---
 
@@ -197,6 +231,75 @@ python main.py
   - 对每张 B 组图片的 OCR 文本，与所有 A 组文本计算相似度得分。
   - 选取分数最高且（可能）高于某个阈值的 A 组作为匹配对象。
   - 将该 A 组图片名作为 B 组图片的目标新名称。
+
+---
+
+## 打包为独立 EXE（发布说明）
+
+采用 **“半独立打包”方案**：**1 个 GUI EXE + 1 个 OCR 文件夹**，即：
+
+- `UmiOCR-Rename.exe`
+- `PaddleOCR-json_v1.4.1\`（与 exe 同级，保持完整原始结构）
+
+### 1. 准备打包环境
+
+在项目根目录执行：
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install pyinstaller PySide6 pillow fuzzywuzzy python-Levenshtein
+```
+
+> **说明**：`python-Levenshtein` 用于加速 `fuzzywuzzy`，大幅提高相似度计算性能。
+
+### 2. 打包命令
+
+在已激活虚拟环境、当前目录为项目根目录时执行：
+
+```bash
+python -m PyInstaller --name "UmiOCR-Rename" --noconfirm --noconsole --onefile main.py
+```
+
+完成后，`dist` 目录中会生成：
+
+- `dist\UmiOCR-Rename.exe`
+
+### 3. 布置 OCR 引擎文件夹
+
+将整个 `PaddleOCR-json_v1.4.1` 目录复制到 `dist` 目录下，形成结构：
+
+```text
+dist\
+  ├─ UmiOCR-Rename.exe
+  └─ PaddleOCR-json_v1.4.1\
+      ├─ PaddleOCR-json.exe
+      ├─ models\
+      ├─ *.dll
+      └─ ...
+```
+
+此时，可直接双击 `UmiOCR-Rename.exe` 使用，无需本地安装 Python。
+
+### 4. 打包相关代码约定（已经在项目中实现）
+
+- 使用 `get_base_dir()` 与 `resource_path()` 统一获取资源路径，保证：
+  - 开发环境：从 `main.py` 所在目录查找；
+  - 打包后：从 exe 所在目录查找。
+- `find_paddleocr_exe()` 优先查找：
+  - `PaddleOCR-json_v1.4.1\PaddleOCR-json.exe`
+  - 以及同级 `PaddleOCR-json.exe`，并检查旁边存在 `models` 目录。
+- 程序入口处使用：
+
+```python
+if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
+    main()
+```
+
+以兼容 Windows 下 PyInstaller `--onefile` 与子进程场景，避免异常自启动/多进程问题。
 
 ---
 

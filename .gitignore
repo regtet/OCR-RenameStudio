@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*.pyc
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE / 编辑器
+.vscode/
+.idea/
+
+# PyInstaller / 打包产物
+build/
+dist/
+*.spec
+
+# 日志 / 临时文件
+*.log
+*.tmp
+*.bak
+
